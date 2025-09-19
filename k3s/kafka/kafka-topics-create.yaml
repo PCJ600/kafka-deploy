@@ -1,0 +1,40 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kafka-topics-create
+  namespace: kafka
+spec:
+  backoffLimit: 100
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: create-topics
+        image: mydockerregistry.com:5000/confluentinc/cp-kafka:8.0.0
+        command:
+          - sh
+          - -c
+          - |
+            KAFKA_NODES="kafka-0.kafka-headless.kafka:9092 kafka-1.kafka-headless.kafka:9092 kafka-2.kafka-headless.kafka:9092"
+            
+            echo "Waiting for all Kafka nodes to be ready..."
+            for node in $KAFKA_NODES; do
+              until kafka-topics --list --bootstrap-server $node > /dev/null 2>&1; do
+                echo "Waiting for $node..."
+                sleep 10
+              done
+            done
+
+            kafka-topics --create --bootstrap-server kafka-0.kafka-headless.kafka:9092 --topic up.egw.telemetry \
+              --partitions 6 --replication-factor 3 --config retention.ms=3600000 --if-not-exists
+            kafka-topics --create --bootstrap-server kafka-0.kafka-headless.kafka:9092 --topic up.egw.model \
+              --partitions 6 --replication-factor 3 --config retention.ms=604800000 --if-not-exists
+            kafka-topics --create --bootstrap-server kafka-0.kafka-headless.kafka:9092 --topic up.egw.alert \
+              --partitions 6 --replication-factor 3 --config retention.ms=604800000 --if-not-exists
+            kafka-topics --create --bootstrap-server kafka-0.kafka-headless.kafka:9092 --topic up.egw.notify \
+              --partitions 6 --replication-factor 3 --config retention.ms=3600000 --if-not-exists
+            kafka-topics --create --bootstrap-server kafka-0.kafka-headless.kafka:9092 --topic down.egw.notify \
+              --partitions 6 --replication-factor 3 --config retention.ms=3600000 --if-not-exists
+            kafka-topics --create --bootstrap-server kafka-0.kafka-headless.kafka:9092 --topic audit \
+              --partitions 1 --replication-factor 3 --config retention.ms=604800000 --if-not-exists
+            echo "All topics created"
